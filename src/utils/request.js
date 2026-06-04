@@ -1,9 +1,9 @@
 // 请求工具函数
 // 后端服务器地址配置 - 根据实际情况修改
 //线上地址
-// const BASE_URL = 'https://oopnpjictkfv.sealoshzh.site/api/v1'
+const BASE_URL = 'https://oopnpjictkfv.sealoshzh.site/api/v1'
 //公网调试地址
-const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site/api/v1'
+// const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site/api/v1'
 
 // 获取token
 export function getToken() {
