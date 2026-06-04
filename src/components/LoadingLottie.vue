@@ -1,0 +1,374 @@
+<template>
+  <view v-if="show" class="loading-lottie-overlay">
+    <view class="loading-lottie-container">
+      <!-- Lottie动画容器 -->
+      <view id="loading-lottie" class="loading-lottie"></view>
+      
+      <!-- 加载提示文字 -->
+      <view class="loading-text">{{ loadingText }}</view>
+      
+      <!-- 加载时长显示（调试用） -->
+      <view v-if="showDuration" class="duration-text">已加载 {{ displayDuration }}ms</view>
+    </view>
+  </view>
+</template>
+
+<script>
+/**
+ * LoadingLottie 组件
+ * 
+ * 功能说明：
+ * 1. 使用Lottie动画展示加载效果
+ * 2. 支持自定义加载提示文字
+ * 3. 支持手动控制显示/隐藏
+ * 4. 支持设置最小显示时长（避免动画闪一下就消失）
+ * 5. 支持自动隐藏（设置最大显示时长）
+ * 6. 自动加载 loading.json 动画文件
+ * 
+ * 设计思路：
+ * - 使用lottie-web库加载JSON动画
+ * - 通过v-if控制整个遮罩层的显示
+ * - 支持props传入加载文字和时长参数
+ * - 提供show/hide方法供父组件调用
+ * - 使用setTimeout实现最小/最大时长控制
+ * - 在showLoading时动态加载动画（因为此时容器才存在）
+ * 
+ * 使用说明：
+ * 需要在 static/lottie/ 目录下放置 loading.json 文件
+ * 
+ * Props:
+ * - loadingText: 加载提示文字（默认："加载中..."）
+ * - minDuration: 最小显示时长（毫秒，默认：500ms），确保动画至少显示一段时间
+ * - maxDuration: 最大显示时长（毫秒，默认：0表示不自动隐藏），超过此时长自动隐藏
+ * - showDuration: 是否显示当前加载时长（调试用，默认：false）
+ * 
+ * Methods:
+ * - showLoading(): 显示加载动画
+ * - hideLoading(): 隐藏加载动画
+ */
+export default {
+  name: 'LoadingLottie',
+  
+  props: {
+    // 加载提示文字
+    loadingText: {
+      type: String,
+      default: '加载中...'
+    },
+    // 最小显示时长（毫秒）- 确保动画至少显示一段时间
+    minDuration: {
+      type: Number,
+      default: 500
+    },
+    // 最大显示时长（毫秒）- 0表示不自动隐藏
+    maxDuration: {
+      type: Number,
+      default: 0
+    },
+    // 是否显示当前加载时长（调试用）
+    showDuration: {
+      type: Boolean,
+      default: false
+    }
+  },
+  
+  data() {
+    return {
+      show: false, // 是否显示加载动画
+      lottieInstance: null, // Lottie动画实例
+      startTime: 0, // 动画开始时间
+      durationInterval: null, // 时长显示定时器
+      displayDuration: 0, // 当前显示时长（毫秒）
+      minDurationTimer: null, // 最小时长定时器
+      maxDurationTimer: null, // 最大时长定时器
+      animationLoaded: false // 动画是否已加载
+    }
+  },
+  
+  watch: {
+    // 当show变为true时，加载动画
+    show(newVal) {
+      if (newVal && !this.animationLoaded) {
+        this.$nextTick(() => {
+          this.loadLottieAnimation()
+        })
+      }
+    }
+  },
+  
+  beforeDestroy() {
+    // 组件销毁时清除定时器和动画
+    this.clearTimers()
+    this.destroyLottie()
+  },
+  
+  methods: {
+    /**
+     * 显示加载动画
+     * @param {Object} options - 可选参数
+     * @param {Number} options.minDuration - 覆盖props的最小时长
+     * @param {Number} options.maxDuration - 覆盖props的最大时长
+     */
+    showLoading(options = {}) {
+      // 清除之前的定时器
+      this.clearTimers()
+      
+      // 记录开始时间
+      this.startTime = Date.now()
+      this.displayDuration = 0
+      
+      // 显示遮罩层（触发watch加载动画）
+      this.show = true
+      
+      // 设置最小显示时长
+      const minDuration = options.minDuration !== undefined ? options.minDuration : this.minDuration
+      this.minDurationTimer = setTimeout(() => {
+        this.minDurationTimer = null
+      }, minDuration)
+      
+      // 设置最大显示时长（自动隐藏）
+      const maxDuration = options.maxDuration !== undefined ? options.maxDuration : this.maxDuration
+      if (maxDuration > 0) {
+        this.maxDurationTimer = setTimeout(() => {
+          this.hideLoading()
+        }, maxDuration)
+      }
+      
+      // 如果需要显示时长，启动定时器
+      if (this.showDuration) {
+        this.startDurationDisplay()
+      }
+    },
+    
+    /**
+     * 隐藏加载动画
+     * 如果最小时长还没到，则等待最小时长结束后再隐藏
+     */
+    hideLoading() {
+      // 如果最小时长定时器还在运行，等待它结束
+      if (this.minDurationTimer) {
+        return
+      }
+      
+      // 清除所有定时器
+      this.clearTimers()
+      
+      // 隐藏动画
+      this.show = false
+    },
+    
+    /**
+     * 启动时长显示定时器
+     */
+    startDurationDisplay() {
+      this.durationInterval = setInterval(() => {
+        this.displayDuration = Date.now() - this.startTime
+      }, 50)
+    },
+    
+    /**
+     * 清除所有定时器
+     */
+    clearTimers() {
+      if (this.minDurationTimer) {
+        clearTimeout(this.minDurationTimer)
+        this.minDurationTimer = null
+      }
+      if (this.maxDurationTimer) {
+        clearTimeout(this.maxDurationTimer)
+        this.maxDurationTimer = null
+      }
+      if (this.durationInterval) {
+        clearInterval(this.durationInterval)
+        this.durationInterval = null
+      }
+    },
+    
+    /**
+     * 加载Lottie动画
+     */
+    async loadLottieAnimation() {
+      try {
+        await this.loadLottieWithLibrary()
+      } catch (error) {
+        console.warn('Lottie加载失败，显示占位图:', error)
+        this.showPlaceholder()
+      }
+    },
+    
+    /**
+     * 使用lottie-web库加载动画
+     * 通过动态import()导入ES模块
+     */
+    loadLottieWithLibrary() {
+      return new Promise((resolve, reject) => {
+        // 等待DOM渲染完成
+        setTimeout(() => {
+          const container = document.getElementById('loading-lottie')
+          if (!container) {
+            console.error('Lottie container not found!')
+            reject(new Error('Container not found'))
+            return
+          }
+          
+          console.log('Lottie container found:', container)
+          
+          // 动态导入lottie-web（ES模块方式）
+          import('lottie-web').then((lottie) => {
+            console.log('lottie-web imported successfully')
+            
+            // 如果已有动画实例，先销毁
+            if (this.lottieInstance) {
+              this.lottieInstance.destroy()
+              this.lottieInstance = null
+            }
+            
+            // 加载动画JSON文件
+            const animationPath = '/static/lottie/loading.json'
+            console.log('Loading animation from:', animationPath)
+            
+            try {
+              this.lottieInstance = lottie.default.loadAnimation({
+                container: container,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: animationPath
+              })
+              
+              // 动画加载完成回调
+              this.lottieInstance.addEventListener('DOMLoaded', () => {
+                console.log('加载动画加载成功！')
+                this.animationLoaded = true
+                resolve()
+              })
+              
+              // 动画错误回调
+              this.lottieInstance.addEventListener('error', (e) => {
+                console.error('Lottie animation error:', e)
+                reject(e)
+              })
+              
+            } catch (error) {
+              console.error('Failed to load lottie animation:', error)
+              reject(error)
+            }
+          }).catch((error) => {
+            console.error('lottie-web导入失败:', error)
+            reject(error)
+          })
+        }, 50)
+      })
+    },
+    
+    /**
+     * 显示占位图（当Lottie文件不存在时）
+     */
+    showPlaceholder() {
+      const container = document.getElementById('loading-lottie')
+      if (!container) return
+      
+      container.innerHTML = `
+        <div style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 100%;
+        ">
+          <div style="font-size: 80rpx;">⏳</div>
+          <div style="
+            font-size: 18rpx;
+            color: #ff80aa;
+            margin-top: 10rpx;
+          ">加载中...</div>
+        </div>
+      `
+    },
+    
+    /**
+     * 销毁Lottie动画实例
+     */
+    destroyLottie() {
+      if (this.lottieInstance) {
+        this.lottieInstance.destroy()
+        this.lottieInstance = null
+      }
+      this.animationLoaded = false
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* 加载动画遮罩层 */
+.loading-lottie-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease;
+}
+
+/* 加载动画容器 */
+.loading-lottie-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Lottie动画容器 */
+.loading-lottie {
+  width: 300rpx;
+  height: 300rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff0f5;
+  border-radius: 20rpx;
+}
+
+/* 加载文字 */
+.loading-text {
+  margin-top: 30rpx;
+  font-size: 28rpx;
+  color: #ff4d88;
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* 时长显示文字 */
+.duration-text {
+  margin-top: 15rpx;
+  font-size: 20rpx;
+  color: #ffb3d9;
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+</style>
