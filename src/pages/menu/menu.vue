@@ -1,5 +1,12 @@
 <template>
   <view class="menu-container">
+    <!-- 加载动画组件 - 设置最小2秒显示时长，显示时长计数器 -->
+    <LoadingLottie 
+      ref="loadingLottie" 
+      loading-text="正在加载美食数据..."
+      :show-duration="true"
+    />
+    
     <!-- 顶部轮播图 -->
     <view class="banner-section">
       <view class="banner-box">
@@ -10,7 +17,7 @@
         </view>
       </view>
     </view>
-
+    <TimeLottieAvatar />
     <!-- 个人信息栏 -->
     <view class="info-bar">
       <view class="avatar-box" @click="goToEdit">
@@ -190,6 +197,8 @@
 import cartStore from '../../store/cart.js'
 import { getHotFoods } from '../../api/food.js'
 import { submitReview } from '../../api/review.js'
+import TimeLottieAvatar from '@/components/TimeLottieAvatar.vue'
+import LoadingLottie from '@/components/LoadingLottie.vue'
 
 export default {
   data() {
@@ -221,7 +230,10 @@ export default {
     }
   },
   onShow() {
-    // 页面显示时从 store 获取最新购物车数据
+    // 页面显示时显示加载动画
+    this.$refs.loadingLottie?.showLoading()
+    
+    // 从 store 获取最新购物车数据
     this.cartList = cartStore.getCart()
     // 如果购物车为空，关闭弹窗
     if (this.cartList.length === 0) {
@@ -289,6 +301,11 @@ export default {
           title: '当前还在建设中哦~',
           icon: 'none'
         })
+      } finally {
+        // 数据加载完成，隐藏加载动画
+        setTimeout(() => {
+          this.$refs.loadingLottie?.hideLoading()
+        }, 500)
       }
     },
     closeModal() {
@@ -393,6 +410,10 @@ export default {
         this.cartPosition = { right: '30rpx', left: 'auto' }
       }
     }
+  },
+  components: {
+    TimeLottieAvatar,
+    LoadingLottie
   }
 }
 </script>
