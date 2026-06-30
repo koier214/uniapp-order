@@ -1,9 +1,9 @@
 // 评价模块API
-import { post } from '../utils/request.js'
+import { put } from '../utils/request.js'
 
-// 提交评价
+// 提交/更新评价（覆盖之前的评分）
 export function submitReview(rating, suggestion) {
-  return post('/review/submit', {
+  return put('/review/submit', {
     rating,
     suggestion
   })
