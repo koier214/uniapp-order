@@ -5,8 +5,8 @@
       <view class="background-box">
         <view class="avatar-info">
           <view class="avatar-box" @click="goToEdit">
-            <image class="avatar-img" src="" mode="aspectFill" />
-            <text class="avatar-text">{{ avatarText }}</text>
+            <image v-if="avatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+            <text v-else class="avatar-text">{{ avatarText }}</text>
           </view>
           <view class="name-text">{{ nickname }}</view>
         </view>
@@ -82,6 +82,7 @@ import { getUserInfo } from '../../api/user.js'
 export default {
   data() {
     return {
+      avatar: '',
       nickname: '美食达人',
       signature: '今天也要好好吃饭~',
       points: 0
@@ -90,6 +91,16 @@ export default {
   computed: {
     avatarText() {
       return this.nickname.charAt(0) || '萌'
+    },
+    avatarUrl() {
+      // 如果avatar是完整URL，直接返回；如果是相对路径，拼接BASE_URL
+      if (!this.avatar) return ''
+      if (this.avatar.startsWith('http://') || this.avatar.startsWith('https://')) {
+        return this.avatar
+      }
+      // 拼接后端地址
+      const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site'
+      return BASE_URL + this.avatar
     }
   },
   onShow() {
@@ -110,15 +121,19 @@ export default {
     async loadUserInfo() {
       try {
         const result = await getUserInfo()
+        this.avatar = result.avatar || ''
         this.nickname = result.nickname || '美食达人'
         this.signature = result.signature || '今天也要好好吃饭~'
         this.points = result.points || 0
         
         // 同步到本地存储
         uni.setStorageSync('userInfo', {
+          avatar: this.avatar,
           nickname: this.nickname,
           signature: this.signature,
-          points: this.points
+          points: this.points,
+          phone: result.phone || '',
+          email: result.email || ''
         })
       } catch (error) {
         console.error('获取用户信息失败', error)
@@ -126,6 +141,7 @@ export default {
         try {
           const userInfo = uni.getStorageSync('userInfo')
           if (userInfo) {
+            this.avatar = userInfo.avatar || ''
             this.nickname = userInfo.nickname || '美食达人'
             this.signature = userInfo.signature || '今天也要好好吃饭~'
             this.points = userInfo.points || 0
