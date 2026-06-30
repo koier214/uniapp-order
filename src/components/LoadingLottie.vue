@@ -198,12 +198,13 @@ export default {
     
     /**
      * 使用lottie-web库加载动画
-     * 通过动态import()导入ES模块
+     * 直接使用全局lottie对象（已在index.html中通过CDN引入）
+     * 使用fetch加载JSON文件以避免XMLHttpRequest响应类型问题
      */
     loadLottieWithLibrary() {
-      return new Promise((resolve, reject) => {
+      return new Promise(async (resolve, reject) => {
         // 等待DOM渲染完成
-        setTimeout(() => {
+        setTimeout(async () => {
           const container = document.getElementById('loading-lottie')
           if (!container) {
             console.error('Lottie container not found!')
@@ -213,9 +214,13 @@ export default {
           
           console.log('Lottie container found:', container)
           
-          // 动态导入lottie-web（ES模块方式）
-          import('lottie-web').then((lottie) => {
-            console.log('lottie-web imported successfully')
+          try {
+            // 直接使用全局lottie对象
+            const lottie = window.lottie
+            if (!lottie) {
+              throw new Error('lottie-web not loaded')
+            }
+            console.log('lottie-web loaded successfully')
             
             // 如果已有动画实例，先销毁
             if (this.lottieInstance) {
@@ -223,40 +228,49 @@ export default {
               this.lottieInstance = null
             }
             
-            // 加载动画JSON文件
+            // 使用fetch API加载JSON文件，避免XMLHttpRequest响应类型问题
             const animationPath = '/static/lottie/loading.json'
             console.log('Loading animation from:', animationPath)
             
-            try {
-              this.lottieInstance = lottie.default.loadAnimation({
-                container: container,
-                renderer: 'svg',
-                loop: true,
-                autoplay: true,
-                path: animationPath
-              })
-              
-              // 动画加载完成回调
-              this.lottieInstance.addEventListener('DOMLoaded', () => {
-                console.log('加载动画加载成功！')
-                this.animationLoaded = true
-                resolve()
-              })
-              
-              // 动画错误回调
-              this.lottieInstance.addEventListener('error', (e) => {
-                console.error('Lottie animation error:', e)
-                reject(e)
-              })
-              
-            } catch (error) {
-              console.error('Failed to load lottie animation:', error)
-              reject(error)
+            const response = await fetch(animationPath)
+            
+            // 检查响应状态
+            if (!response.ok) {
+              console.warn(`Animation file not found: ${animationPath}, showing placeholder`)
+              this.showPlaceholder()
+              resolve()
+              return
             }
-          }).catch((error) => {
-            console.error('lottie-web导入失败:', error)
-            reject(error)
-          })
+            
+            // 检查内容类型
+            const contentType = response.headers.get('content-type')
+            if (!contentType || !contentType.includes('application/json')) {
+              console.warn(`Animation file is not valid JSON: ${animationPath}, showing placeholder`)
+              this.showPlaceholder()
+              resolve()
+              return
+            }
+            
+            const animationData = await response.json()
+            console.log('Animation JSON loaded successfully')
+            
+            this.lottieInstance = lottie.loadAnimation({
+              container: container,
+              renderer: 'svg',
+              loop: true,
+              autoplay: true,
+              animationData: animationData  // 使用animationData而不是path
+            })
+            
+            console.log('Lottie animation loaded successfully!')
+            this.animationLoaded = true
+            resolve()
+            
+          } catch (error) {
+            console.error('Failed to load lottie animation:', error)
+            this.showPlaceholder()
+            resolve() // 不拒绝，确保组件能正常工作
+          }
         }, 50)
       })
     },

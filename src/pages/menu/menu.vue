@@ -186,7 +186,7 @@
         </scroll-view>
         <view class="cart-footer">
           <text class="cart-total">合计：¥{{ cartTotalPrice }}</text>
-          <view class="cart-checkout">去结算</view>
+          <view class="cart-checkout" @click="goToCheckout">结算</view>
         </view>
       </view>
     </view>
@@ -230,9 +230,6 @@ export default {
     }
   },
   onShow() {
-    // 页面显示时显示加载动画
-    this.$refs.loadingLottie?.showLoading()
-    
     // 从 store 获取最新购物车数据
     this.cartList = cartStore.getCart()
     // 如果购物车为空，关闭弹窗
@@ -241,7 +238,7 @@ export default {
     }
     // 从本地存储获取用户信息
     this.loadUserInfo()
-    // 获取热门推荐菜品
+    // 获取热门推荐菜品（会自动显示和隐藏加载动画）
     this.loadHotFoods()
   },
   methods: {
@@ -272,6 +269,9 @@ export default {
       }
     },
     async loadHotFoods() {
+      // 网络请求开始时显示加载动画
+      this.$refs.loadingLottie?.showLoading()
+      
       try {
         const result = await getHotFoods()
         this.foodData = result.map(item => ({
@@ -302,7 +302,7 @@ export default {
           icon: 'none'
         })
       } finally {
-        // 数据加载完成，隐藏加载动画
+        // 数据加载完成（成功或失败），隐藏加载动画
         setTimeout(() => {
           this.$refs.loadingLottie?.hideLoading()
         }, 500)
@@ -409,6 +409,11 @@ export default {
       } else {
         this.cartPosition = { right: '30rpx', left: 'auto' }
       }
+    },
+    goToCheckout() {
+      uni.navigateTo({
+        url: '/pages/checkout/checkout'
+      })
     }
   },
   components: {

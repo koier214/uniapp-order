@@ -1,5 +1,13 @@
 <template>
   <view class="menu-list-container">
+    <!-- 加载动画组件 -->
+    <LoadingLottie 
+      ref="loadingLottie" 
+      loading-text="正在加载菜单数据..."
+      :min-duration="500"
+      :show-duration="true"
+    />
+    
     <!-- 顶部公告 -->
     <view class="notice-bar">
       <view class="notice-icon">📢</view>
@@ -118,8 +126,12 @@
 <script>
 import cartStore from '../../store/cart.js'
 import { getCategories, getFoodList } from '../../api/food.js'
+import LoadingLottie from '@/components/LoadingLottie.vue'
 
 export default {
+  components: {
+    LoadingLottie
+  },
   data() {
     return {
       currentCategory: 0,
@@ -162,6 +174,9 @@ export default {
   },
   methods: {
     async loadCategories() {
+      // 网络请求开始时显示加载动画
+      this.$refs.loadingLottie?.showLoading()
+      
       try {
         const categories = await getCategories()
         // 转换 categoryId 为 id 以兼容前端逻辑
@@ -181,9 +196,17 @@ export default {
           title: '当前还在建设中哦~',
           icon: 'none'
         })
+      } finally {
+        // 数据加载完成（成功或失败），隐藏加载动画
+        setTimeout(() => {
+          this.$refs.loadingLottie?.hideLoading()
+        }, 500)
       }
     },
     async loadFoodList(categoryId) {
+      // 网络请求开始时显示加载动画
+      this.$refs.loadingLottie?.showLoading()
+      
       try {
         const foods = await getFoodList(categoryId)
         this.foodList[categoryId] = foods.map(item => ({
@@ -212,6 +235,11 @@ export default {
           title: '当前还在建设中哦~',
           icon: 'none'
         })
+      } finally {
+        // 数据加载完成（成功或失败），隐藏加载动画
+        setTimeout(() => {
+          this.$refs.loadingLottie?.hideLoading()
+        }, 500)
       }
     },
     selectCategory(index) {

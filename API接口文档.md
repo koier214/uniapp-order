@@ -2,8 +2,9 @@
 
 ## 基础信息
 
-**API 根地址**: `https://qhhxncfdtcyd.sealoshzh.site/api/v1`
-
+<!-- **API 根地址**: `https://oopnpjictkfv.sealoshzh.site/api/v1` -->
+// 公网调试地址
+const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site/api/v1'
 **统一响应格式**:
 ```json
 // 成功响应
@@ -209,7 +210,7 @@ Authorization: Bearer <token>
 **查询参数**:
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| categoryId | int | 否 | 分类ID，不传返回全部 |
+| categoryId | int | 否 | 分类ID，不传/0/all 返回全部 |
 
 **成功返回**:
 ```json
@@ -302,7 +303,7 @@ Authorization: Bearer <token>
 
 **方法**: `POST`
 
-**说明**: 批量添加示例菜品数据（仅用于初始化）
+**说明**: 批量添加示例菜品数据（幂等操作，不会重复添加）
 
 **成功返回**:
 ```json
@@ -315,7 +316,37 @@ Authorization: Bearer <token>
 
 ---
 
-## 三、购物车模块
+## 三、厨师模块
+
+### 1. 获取厨师信息
+
+**路径**: `/chef/info`
+
+**方法**: `GET`
+
+**说明**: 获取当前厨师的信息，用于结算页面展示
+
+**成功返回**:
+```json
+{
+  "code": 200,
+  "message": "获取成功",
+  "data": {
+    "chefId": 1,
+    "name": "王师傅",
+    "title": "金牌厨师",
+    "experience": 15,
+    "specialty": "川湘菜",
+    "rating": 4.9,
+    "avatar": "",
+    "introduction": "从业15年，擅长川湘菜，曾在多家知名餐厅任职"
+  }
+}
+```
+
+---
+
+## 四、购物车模块
 
 ### 1. 获取购物车列表
 
@@ -450,9 +481,9 @@ Authorization: Bearer <token>
 
 ---
 
-## 四、订单模块
+## 五、订单模块
 
-### 1. 创建订单
+### 1. 创建订单（含优惠计算）
 
 **路径**: `/order/create`
 
@@ -464,7 +495,7 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | items | array | 是 | 订单项列表 |
-| remark | string | 否 | 备注 |
+| remark | string | 否 | 备注（少辣、不要香菜等） |
 | tableNumber | string | 否 | 桌号 |
 
 **items 数组结构**:
@@ -475,6 +506,37 @@ Authorization: Bearer <token>
 | price | float | 是 | 单价 |
 | emoji | string | 否 | 表情符号 |
 | quantity | int | 否 | 数量（默认1） |
+| spec | string | 否 | 规格 |
+
+**请求示例**:
+```json
+{
+  "items": [
+    {
+      "foodId": 1,
+      "name": "招牌牛肉锅",
+      "price": 68,
+      "emoji": "🍲",
+      "quantity": 2
+    },
+    {
+      "foodId": 3,
+      "name": "宫保鸡丁",
+      "price": 32,
+      "emoji": "🍛",
+      "quantity": 1
+    }
+  ],
+  "remark": "少辣，不要香菜"
+}
+```
+
+**优惠规则**:
+| 订单金额 | 优惠 | 实付金额 |
+|----------|------|----------|
+| < 100元 | 0元 | 原价 |
+| 100-199元 | 20元 | 原价 - 20 |
+| >= 200元 | 50元 | 原价 - 50 |
 
 **成功返回**:
 ```json
@@ -482,15 +544,39 @@ Authorization: Bearer <token>
   "code": 200,
   "message": "下单成功",
   "data": {
-    "orderId": "ORD20240101120000",
-    "orderNo": "ORD20240101120000",
-    "items": [...],
-    "totalPrice": 136,
+    "orderId": "ORD20240605120000",
+    "orderNo": "ORD20240605120000",
+    "items": [
+      {
+        "foodId": 1,
+        "name": "招牌牛肉锅",
+        "price": 68,
+        "emoji": "🍲",
+        "quantity": 2,
+        "subtotal": 136
+      },
+      {
+        "foodId": 3,
+        "name": "宫保鸡丁",
+        "price": 32,
+        "emoji": "🍛",
+        "quantity": 1,
+        "subtotal": 32
+      }
+    ],
+    "totalPrice": 148,
+    "originalPrice": 168,
+    "discount": 20,
+    "actualPrice": 148,
+    "remark": "少辣，不要香菜",
     "status": "pending",
-    "createTime": "2024-01-01 12:00:00"
+    "statusText": "待确认",
+    "createTime": "2024-06-05 12:00:00"
   }
 }
 ```
+
+**说明**: 创建订单成功后会自动清空购物车
 
 ### 2. 获取订单列表
 
@@ -512,18 +598,18 @@ Authorization: Bearer <token>
   "message": "获取成功",
   "data": [
     {
-      "orderId": "ORD20240101120000",
-      "orderNo": "ORD20240101120000",
+      "orderId": "ORD20240605120000",
+      "orderNo": "ORD20240605120000",
       "location": "万达广场店",
       "status": "completed",
       "statusText": "已完成",
       "items": [
         { "name": "招牌牛肉锅", "count": 2 }
       ],
-      "totalPrice": 136,
+      "totalPrice": 148,
       "time": "12:00",
       "date": "今天",
-      "createTime": "2024-01-01 12:00:00"
+      "createTime": "2024-06-05 12:00:00"
     }
   ]
 }
@@ -548,19 +634,29 @@ Authorization: Bearer <token>
   "code": 200,
   "message": "获取成功",
   "data": {
-    "orderId": "ORD20240101120000",
-    "orderNo": "ORD20240101120000",
+    "orderId": "ORD20240605120000",
+    "orderNo": "ORD20240605120000",
     "location": "万达广场店",
     "status": "completed",
     "statusText": "已完成",
     "items": [
-      { "foodId": 1, "name": "招牌牛肉锅", "price": 68, "emoji": "🍲", "quantity": 2 }
+      {
+        "foodId": 1,
+        "name": "招牌牛肉锅",
+        "price": 68,
+        "emoji": "🍲",
+        "quantity": 2,
+        "subtotal": 136
+      }
     ],
-    "totalPrice": 136,
-    "remark": "",
+    "totalPrice": 148,
+    "originalPrice": 168,
+    "discount": 20,
+    "actualPrice": 148,
+    "remark": "少辣，不要香菜",
     "tableNumber": "",
-    "createTime": "2024-01-01 12:00:00",
-    "updateTime": "2024-01-01 12:30:00"
+    "createTime": "2024-06-05 12:00:00",
+    "updateTime": "2024-06-05 12:30:00"
   }
 }
 ```
@@ -584,9 +680,18 @@ Authorization: Bearer <token>
   "code": 200,
   "message": "取消成功",
   "data": {
-    "orderId": "ORD20240101120000",
+    "orderId": "ORD20240605120000",
     "status": "cancelled"
   }
+}
+```
+
+**错误返回**:
+```json
+{
+  "code": 400,
+  "message": "订单状态不允许取消",
+  "data": null
 }
 ```
 
@@ -612,9 +717,54 @@ Authorization: Bearer <token>
 }
 ```
 
+### 6. 再来一单（快速复购）
+
+**路径**: `/order/reorder/{order_id}`
+
+**方法**: `POST`
+
+**认证**: 需要
+
+**说明**: 将历史订单中的菜品快速添加到当前购物车
+
+**路径参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| order_id | string | 历史订单ID |
+
+**成功返回**:
+```json
+{
+  "code": 200,
+  "message": "已添加到购物车",
+  "data": {
+    "items": [
+      {
+        "foodId": 1,
+        "name": "招牌牛肉锅",
+        "price": 68,
+        "emoji": "🍲",
+        "quantity": 2
+      }
+    ],
+    "totalCount": 2,
+    "totalPrice": 136
+  }
+}
+```
+
+**错误返回**:
+```json
+{
+  "code": 404,
+  "message": "订单不存在或该订单无可复购商品",
+  "data": null
+}
+```
+
 ---
 
-## 五、评价模块
+## 六、评价模块
 
 ### 1. 提交评价
 
@@ -644,7 +794,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 六、统计模块
+## 七、统计模块
 
 ### 1. 获取消费分析
 
@@ -703,7 +853,7 @@ Authorization: Bearer <token>
             "orderId": "ORD20240101120000",
             "time": "12:00",
             "items": [{ "name": "招牌牛肉锅", "count": 2 }],
-            "totalPrice": 136
+            "totalPrice": 148
           }
         ]
       }
@@ -722,9 +872,9 @@ Authorization: Bearer <token>
 | 错误码 | 说明 |
 |--------|------|
 | 200 | 成功 |
-| 400 | 请求参数错误 |
+| 400 | 请求参数错误（如缺少必填字段、订单状态不允许取消） |
 | 401 | 未登录或Token失效 |
-| 404 | 资源不存在 |
+| 404 | 资源不存在（如订单不存在） |
 | 422 | 验证失败（JWT相关） |
 | 500 | 服务器内部错误 |
 
@@ -736,3 +886,17 @@ Authorization: Bearer <token>
 |------|------|
 | 手机号 | `13800138000` |
 | 密码 | `123456` |
+
+---
+
+## 订单状态说明
+
+| 状态值 | 显示文本 | 说明 |
+|--------|----------|------|
+| pending | 待确认 | 订单已创建，等待商家确认 |
+| confirmed | 已确认 | 商家已确认订单 |
+| cooking | 制作中 | 菜品正在制作 |
+| ready | 已就绪 | 菜品已制作完成 |
+| delivering | 配送中 | 正在配送 |
+| completed | 已完成 | 订单已完成 |
+| cancelled | 已取消 | 订单已取消 |

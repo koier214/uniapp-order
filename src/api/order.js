@@ -31,3 +31,8 @@ export function cancelOrder(orderId) {
 export function remindOrder(orderId) {
   return post(`/order/remind/${orderId}`)
 }
+
+// 再来一单（快速复购）
+export function reorder(orderId) {
+  return post(`/order/reorder/${orderId}`)
+}

@@ -69,6 +69,13 @@
 				"navigationBarTitleText": "编辑个人资料",
 				"navigationStyle": "custom"
 			}
+		},
+		{
+			"path": "pages/checkout/checkout",
+			"style": {
+				"navigationBarTitleText": "确认订单",
+				"navigationStyle": "custom"
+			}
 		}
 	],
 	"globalStyle": {
