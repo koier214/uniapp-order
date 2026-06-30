@@ -12,8 +12,8 @@
     <!-- 头像区域 -->
     <view class="avatar-section">
       <view class="avatar-box">
-        <image class="avatar-img" src="" mode="aspectFill" />
-        <text class="avatar-text">{{ avatarText }}</text>
+        <image v-if="avatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+        <text v-else class="avatar-text">{{ avatarText }}</text>
       </view>
       <view class="change-avatar-btn" @click="changeAvatar">
         <text class="change-text">更换头像</text>
@@ -86,6 +86,7 @@ import { updateUserInfo, uploadAvatar } from '../../api/user.js'
 export default {
   data() {
     return {
+      avatar: '',
       nickname: '美食达人',
       phone: '',
       email: '',
@@ -95,6 +96,16 @@ export default {
   computed: {
     avatarText() {
       return this.nickname.charAt(0) || '萌'
+    },
+    avatarUrl() {
+      // 如果avatar是完整URL，直接返回；如果是相对路径，拼接BASE_URL
+      if (!this.avatar) return ''
+      if (this.avatar.startsWith('http://') || this.avatar.startsWith('https://')) {
+        return this.avatar
+      }
+      // 拼接后端地址
+      const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site'
+      return BASE_URL + this.avatar
     }
   },
   onLoad() {
@@ -106,6 +117,7 @@ export default {
       try {
         const userInfo = uni.getStorageSync('userInfo')
         if (userInfo) {
+          this.avatar = userInfo.avatar || ''
           this.nickname = userInfo.nickname || '美食达人'
           this.phone = userInfo.phone || ''
           this.email = userInfo.email || ''
@@ -116,7 +128,17 @@ export default {
       }
     },
     goBack() {
-      uni.navigateBack()
+      // 判断页面栈中是否有上一页
+      const pages = getCurrentPages()
+      if (pages.length > 1) {
+        // 有上一页，正常返回
+        uni.navigateBack()
+      } else {
+        // 没有上一页（可能是直接打开），跳转到用户页
+        uni.reLaunch({
+          url: '/pages/user/user'
+        })
+      }
     },
     changeAvatar() {
       uni.chooseImage({
@@ -125,19 +147,41 @@ export default {
         sourceType: ['album', 'camera'],
         success: async (res) => {
           const tempFilePath = res.tempFilePaths[0]
+          
+          uni.showLoading({
+            title: '上传中...'
+          })
+          
           try {
-            await uploadAvatar(tempFilePath)
+            // 调用上传头像API
+            const result = await uploadAvatar(tempFilePath)
+            
+            console.log('[DEBUG] 头像上传成功:', result)
+            
+            // 更新avatar URL（后端返回的是相对路径，如/uploads/xxx.png）
+            this.avatar = result.avatarUrl || result
+            
+            // 更新本地存储
+            const userInfo = uni.getStorageSync('userInfo') || {}
+            userInfo.avatar = this.avatar
+            uni.setStorageSync('userInfo', userInfo)
+            
+            uni.hideLoading()
             uni.showToast({
               title: '头像已更新',
               icon: 'success'
             })
           } catch (error) {
-            console.error('上传头像失败', error)
+            uni.hideLoading()
+            console.error('[DEBUG] 上传头像失败:', error)
             uni.showToast({
               title: '上传失败',
               icon: 'none'
             })
           }
+        },
+        fail: (err) => {
+          console.error('[DEBUG] 选择图片失败:', err)
         }
       })
     },
@@ -170,8 +214,9 @@ export default {
         // 调用API保存
         await updateUserInfo(updateData)
         
-        // 同步到本地存储
+        // 同步到本地存储（包含avatar）
         const userInfo = {
+          avatar: this.avatar,
           nickname: this.nickname,
           phone: this.phone,
           email: this.email,
