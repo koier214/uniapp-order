@@ -21,15 +21,15 @@
     <!-- 个人信息栏 -->
     <view class="info-bar">
       <view class="avatar-box" @click="goToEdit">
-        <image class="avatar-img" src="" mode="aspectFill" />
-        <text class="avatar-text">{{ avatarText }}</text>
+        <image v-if="avatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+        <text v-else class="avatar-text">{{ avatarText }}</text>
       </view>
       <view class="user-info">
         <text class="user-name">{{ nickname }}</text>
         <text class="user-desc">个性签名：{{ signature }}</text>
       </view>
       <view class="points-box" @click="showModal = true">
-        <text class="points-text">💝 88分</text>
+        <text class="points-text">💝 {{ points }}分</text>
       </view>
     </view>
 
@@ -125,14 +125,20 @@
           </view>
         </view>
         <view class="modal-body">
+          <!-- 提示信息 -->
+          <view class="error-tip" v-if="errorTip">
+            <text class="error-tip-text">{{ errorTip }}</text>
+          </view>
           <!-- 评分 -->
           <view class="form-item">
             <text class="form-label">今日小程序评分</text>
             <view class="rating-box">
               <view class="star-item" v-for="(star, index) in 5" :key="index" @click="setRating(index + 1)">
                 <text class="star-icon">{{ index < rating ? '⭐' : '☆' }}</text>
+                <text class="star-score">{{ index + 1 }}</text>
               </view>
             </view>
+            <text class="rating-hint">{{ ratingText }}</text>
           </view>
           <!-- 建议 -->
           <view class="form-item">
@@ -147,49 +153,8 @@
       </view>
     </view>
 
-    <!-- 购物车按钮 -->
-    <view 
-      class="cart-btn" 
-      v-if="cartList.length > 0" 
-      :style="{ right: cartPosition.right, left: cartPosition.left }"
-      @touchstart="onTouchStart"
-      @touchmove="onTouchMove"
-      @touchend="onTouchEnd"
-      @click="toggleCart"
-    >
-      <text class="cart-icon">🛒</text>
-      <view class="cart-badge">{{ cartTotalCount }}</view>
-    </view>
-
-    <!-- 购物车列表弹窗 -->
-    <view class="cart-overlay" v-if="showCart" @click="toggleCart">
-      <view class="cart-popup" @click.stop>
-        <view class="cart-header">
-          <text class="cart-title">购物车</text>
-          <view class="cart-clear" @click="clearCart">清空</view>
-        </view>
-        <scroll-view class="cart-list" scroll-y>
-          <view class="cart-item" v-for="(item, index) in cartList" :key="index">
-            <view class="cart-item-left">
-              <text class="cart-item-emoji">{{ item.emoji }}</text>
-              <view class="cart-item-info">
-                <text class="cart-item-name">{{ item.name }}</text>
-                <text class="cart-item-price">¥{{ item.price }}</text>
-              </view>
-            </view>
-            <view class="cart-item-right">
-              <view class="quantity-minus" @click="decreaseCartItem(index)">-</view>
-              <text class="quantity-num">{{ item.quantity }}</text>
-              <view class="quantity-plus" @click="increaseCartItem(index)">+</view>
-            </view>
-          </view>
-        </scroll-view>
-        <view class="cart-footer">
-          <text class="cart-total">合计：¥{{ cartTotalPrice }}</text>
-          <view class="cart-checkout" @click="goToCheckout">结算</view>
-        </view>
-      </view>
-    </view>
+    <!-- 购物车组件 -->
+    <CartPopup ref="cartPopup" />
   </view>
 </template>
 
@@ -197,8 +162,10 @@
 import cartStore from '../../store/cart.js'
 import { getHotFoods } from '../../api/food.js'
 import { submitReview } from '../../api/review.js'
+import { getUserInfo } from '../../api/user.js'
 import TimeLottieAvatar from '@/components/TimeLottieAvatar.vue'
 import LoadingLottie from '@/components/LoadingLottie.vue'
+import CartPopup from '@/components/CartPopup.vue'
 
 export default {
   data() {
@@ -206,39 +173,40 @@ export default {
       showModal: false,
       rating: 0,
       suggestion: '',
-      cartList: [],
-      showCart: false,
-      cartPosition: { right: '30rpx', left: 'auto' },
-      startX: 0,
-      startY: 0,
-      isDragging: false,
+      errorTip: '',
+      avatar: '',
       nickname: '美食达人',
       signature: '今天也要好好吃饭~',
+      points: 0,
       foodData: [],
       hasHotFoods: true
     }
   },
   computed: {
-    cartTotalCount() {
-      return cartStore.getTotalCount(this.cartList)
-    },
-    cartTotalPrice() {
-      return cartStore.getTotalPrice(this.cartList)
-    },
     avatarText() {
       return this.nickname.charAt(0) || '萌'
+    },
+    avatarUrl() {
+      // 如果avatar是完整URL，直接返回；如果是相对路径，拼接BASE_URL
+      if (!this.avatar) return ''
+      if (this.avatar.startsWith('http://') || this.avatar.startsWith('https://')) {
+        return this.avatar
+      }
+      // 拼接后端地址
+      const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site'
+      return BASE_URL + this.avatar
+    },
+    ratingText() {
+      const texts = ['', '非常不满意', '不满意', '一般', '满意', '非常满意']
+      return this.rating > 0 ? texts[this.rating] + ' (' + this.rating + '分)' : '请选择评分'
     }
   },
   onShow() {
-    // 从 store 获取最新购物车数据
-    this.cartList = cartStore.getCart()
-    // 如果购物车为空，关闭弹窗
-    if (this.cartList.length === 0) {
-      this.showCart = false
-    }
+    // 刷新购物车数据
+    this.$refs.cartPopup?.refreshCart()
     // 从本地存储获取用户信息
     this.loadUserInfo()
-    // 获取热门推荐菜品（会自动显示和隐藏加载动画）
+    // 获取热门推荐菜品
     this.loadHotFoods()
   },
   methods: {
@@ -261,8 +229,10 @@ export default {
       try {
         const userInfo = uni.getStorageSync('userInfo')
         if (userInfo) {
+          this.avatar = userInfo.avatar || ''
           this.nickname = userInfo.nickname || '美食达人'
           this.signature = userInfo.signature || '今天也要好好吃饭~'
+          this.points = userInfo.points || 0
         }
       } catch (e) {
         console.error('加载用户信息失败', e)
@@ -317,36 +287,71 @@ export default {
       this.rating = value
     },
     async submitForm() {
+      // 清除之前的错误提示
+      this.errorTip = ''
+      
       if (this.rating === 0) {
-        uni.showToast({
-          title: '请先评分',
-          icon: 'none'
-        })
-        return
-      }
-      if (!this.suggestion.trim()) {
-        uni.showToast({
-          title: '请填写建议',
-          icon: 'none'
-        })
+        this.errorTip = '请先选择评分'
         return
       }
       
+      uni.showLoading({
+        title: '提交中...'
+      })
+      
       try {
-        await submitReview(this.rating, this.suggestion)
+        // 提交评价（后端会根据评分增加用户积分）
+        const reviewResult = await submitReview(this.rating, this.suggestion)
+        console.log('[DEBUG] 评价提交结果:', reviewResult)
+        
+        // 关闭弹窗
+        this.closeModal()
+        
+        // 从后端获取最新用户信息（包含更新后的积分）
+        await this.fetchUserInfo()
+        
+        uni.hideLoading()
         uni.showToast({
-          title: '提交成功',
-          icon: 'success'
+          title: '提交成功！积分已更新',
+          icon: 'success',
+          duration: 2000
         })
-        setTimeout(() => {
-          this.closeModal()
-        }, 1500)
+        
+        console.log('[DEBUG] 提交后最新积分:', this.points)
       } catch (error) {
+        uni.hideLoading()
         console.error('提交评价失败', error)
         uni.showToast({
-          title: '提交失败',
-          icon: 'none'
+          title: '提交失败，请重试',
+          icon: 'none',
+          duration: 2000
         })
+      }
+    },
+    async fetchUserInfo() {
+      try {
+        const result = await getUserInfo()
+        console.log('[DEBUG] 获取用户信息:', result)
+        
+        // 更新页面数据
+        this.avatar = result.avatar || ''
+        this.nickname = result.nickname || '美食达人'
+        this.signature = result.signature || '今天也要好好吃饭~'
+        this.points = result.points || 0
+        
+        // 同步到本地存储
+        uni.setStorageSync('userInfo', {
+          avatar: this.avatar,
+          nickname: this.nickname,
+          signature: this.signature,
+          points: this.points,
+          phone: result.phone || '',
+          email: result.email || ''
+        })
+        
+        console.log('[DEBUG] 用户积分更新为:', this.points)
+      } catch (error) {
+        console.error('获取用户信息失败', error)
       }
     },
     goToCategory(categoryIndex) {
@@ -362,63 +367,20 @@ export default {
     },
     addToCart(foodIndex) {
       const food = this.foodData[foodIndex]
-      this.cartList = cartStore.addItem(food)
+      cartStore.addItem(food)
+      this.$refs.cartPopup?.refreshCart()
       
       uni.showToast({
         title: '已加入购物车',
         icon: 'success',
         duration: 1000
       })
-    },
-    toggleCart() {
-      this.showCart = !this.showCart
-    },
-    clearCart() {
-      this.cartList = cartStore.clearCart()
-      this.showCart = false
-    },
-    decreaseCartItem(index) {
-      this.cartList = cartStore.decreaseItem(index)
-      // 如果购物车为空，关闭弹窗
-      if (this.cartList.length === 0) {
-        this.showCart = false
-      }
-    },
-    increaseCartItem(index) {
-      this.cartList = cartStore.increaseItem(index)
-    },
-    onTouchStart(e) {
-      this.isDragging = true
-      const touch = e.touches[0]
-      this.startX = touch.clientX
-      this.startY = touch.clientY
-    },
-    onTouchMove(e) {
-      if (!this.isDragging) return
-    },
-    onTouchEnd(e) {
-      if (!this.isDragging) return
-      this.isDragging = false
-      
-      const touch = e.changedTouches[0]
-      const endX = touch.clientX
-      const screenWidth = uni.getSystemInfoSync().screenWidth
-      
-      if (endX < screenWidth / 2) {
-        this.cartPosition = { left: '30rpx', right: 'auto' }
-      } else {
-        this.cartPosition = { right: '30rpx', left: 'auto' }
-      }
-    },
-    goToCheckout() {
-      uni.navigateTo({
-        url: '/pages/checkout/checkout'
-      })
     }
   },
   components: {
     TimeLottieAvatar,
-    LoadingLottie
+    LoadingLottie,
+    CartPopup
   }
 }
 </script>
@@ -876,6 +838,22 @@ page {
   margin-bottom: 20rpx;
 }
 
+/* 错误提示 */
+.error-tip {
+  background: #fff0f5;
+  border: 2rpx solid #ff4d88;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  text-align: center;
+}
+
+.error-tip-text {
+  font-size: 26rpx;
+  color: #ff4d88;
+  font-weight: 600;
+}
+
 .rating-box {
   display: flex;
   gap: 20rpx;
@@ -887,11 +865,30 @@ page {
 }
 
 .star-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 10rpx;
 }
 
 .star-icon {
   font-size: 56rpx;
+}
+
+.star-score {
+  font-size: 20rpx;
+  color: #ff6b9d;
+  margin-top: 8rpx;
+  font-weight: 600;
+}
+
+.rating-hint {
+  display: block;
+  text-align: center;
+  font-size: 24rpx;
+  color: #ff6b9d;
+  margin-top: 16rpx;
+  font-weight: 500;
 }
 
 .form-textarea {
@@ -932,195 +929,6 @@ page {
 
 .btn-confirm {
   background: linear-gradient(135deg, #ff6b9d 0%, #ff8fbb 100%);
-  color: #ffffff;
-  box-shadow: 0 8rpx 20rpx rgba(255, 107, 157, 0.3);
-}
-
-/* 购物车按钮 */
-.cart-btn {
-  position: fixed;
-  bottom: 200rpx;
-  width: 120rpx;
-  height: 120rpx;
-  background: linear-gradient(135deg, #ff6b9d 0%, #ff8fbb 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 12rpx 32rpx rgba(255, 107, 157, 0.4);
-  z-index: 9998;
-  transition: left 0.3s, right 0.3s;
-  border: 4rpx solid #ffd6e0;
-}
-
-.cart-icon {
-  font-size: 56rpx;
-}
-
-.cart-badge {
-  position: absolute;
-  top: -8rpx;
-  right: -8rpx;
-  min-width: 44rpx;
-  height: 44rpx;
-  background: #ff4d88;
-  border-radius: 22rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24rpx;
-  color: #ffffff;
-  font-weight: 700;
-  padding: 0 8rpx;
-  border: 3rpx solid #ffffff;
-}
-
-/* 购物车弹窗 */
-.cart-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.cart-popup {
-  width: 100%;
-  max-width: 100vw;
-  max-height: 70vh;
-  background: #ffffff;
-  border-radius: 32rpx 32rpx 0 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 -20rpx 60rpx rgba(255, 107, 157, 0.3);
-  box-sizing: border-box;
-}
-
-.cart-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 30rpx;
-  background: linear-gradient(135deg, #fff0f5 0%, #ffe4ed 100%);
-  border-bottom: 3rpx solid #ffd6e0;
-}
-
-.cart-title {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #ff4d88;
-}
-
-.cart-clear {
-  font-size: 26rpx;
-  color: #ff80aa;
-  font-weight: 500;
-}
-
-.cart-list {
-  flex: 1;
-  max-height: 50vh;
-  padding: 20rpx 30rpx;
-  width: 100%;
-  box-sizing: border-box;
-  overflow-x: hidden;
-}
-
-.cart-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24rpx 0;
-  border-bottom: 2rpx solid #ffe4ed;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.cart-item-left {
-  display: flex;
-  align-items: center;
-  flex: 1;
-}
-
-.cart-item-emoji {
-  font-size: 56rpx;
-  margin-right: 20rpx;
-}
-
-.cart-item-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.cart-item-name {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #ff4d88;
-  margin-bottom: 8rpx;
-}
-
-.cart-item-price {
-  font-size: 24rpx;
-  color: #ff80aa;
-}
-
-.cart-item-right {
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-}
-
-.quantity-minus,
-.quantity-plus {
-  width: 56rpx;
-  height: 56rpx;
-  background: linear-gradient(135deg, #fff0f5 0%, #ffe4ed 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-  color: #ff6b9d;
-  font-weight: 700;
-  border: 2rpx solid #ffd6e0;
-}
-
-.quantity-num {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #ff4d88;
-  min-width: 40rpx;
-  text-align: center;
-}
-
-.cart-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 30rpx;
-  padding-bottom: calc(30rpx + env(safe-area-inset-bottom));
-  background: #ffffff;
-  border-top: 3rpx solid #ffd6e0;
-}
-
-.cart-total {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #ff4d88;
-}
-
-.cart-checkout {
-  background: linear-gradient(135deg, #ff6b9d 0%, #ff8fbb 100%);
-  padding: 20rpx 50rpx;
-  border-radius: 40rpx;
-  font-size: 28rpx;
-  font-weight: 700;
   color: #ffffff;
   box-shadow: 0 8rpx 20rpx rgba(255, 107, 157, 0.3);
 }
