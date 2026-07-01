@@ -7,8 +7,18 @@
       :class="{ 'is-clicked': isClicked }"
       @click="handleClick"
     >
-      <!-- Lottie动画容器 -->
+      <!-- #ifdef H5 -->
+      <!-- Lottie动画容器（仅H5环境可用） -->
       <view id="panda-lottie" class="panda-lottie"></view>
+      <!-- #endif -->
+      
+      <!-- #ifdef MP-WEIXIN -->
+      <!-- 小程序环境：显示静态熊猫emoji（小程序没有DOM，无法使用lottie-web） -->
+      <view class="panda-placeholder">
+        <text class="panda-emoji">{{ pandaEmoji }}</text>
+        <text class="panda-label">{{ pandaLabel }}</text>
+      </view>
+      <!-- #endif -->
       
       <!-- 喜欢动画遮罩 -->
       <view v-if="isClicked" class="like-overlay">
@@ -95,6 +105,26 @@ export default {
         eating: '/static/lottie/eating.json',
         sport: '/static/lottie/sport.json'
       }
+    },
+    // 小程序环境：熊猫emoji映射（替代lottie动画）
+    pandaEmoji() {
+      const emojiMap = {
+        sleeping: '🐼💤',
+        waking: '🐼😪',
+        eating: '🐼🍜',
+        sport: '🐼🏃'
+      }
+      return emojiMap[this.currentTimePeriod] || '🐼'
+    },
+    // 小程序环境：熊猫状态文字
+    pandaLabel() {
+      const labelMap = {
+        sleeping: '睡觉中...',
+        waking: '刚睡醒...',
+        eating: '吃饭中...',
+        sport: '运动中...'
+      }
+      return labelMap[this.currentTimePeriod] || ''
     }
   },
   
@@ -103,12 +133,20 @@ export default {
     this.checkTime()
     // 启动定时器，每分钟检查一次时间
     this.startTimer()
+    // #ifdef H5
+    // H5环境加载lottie动画
+    this.$nextTick(() => {
+      this.loadLottieAnimation(this.currentTimePeriod)
+    })
+    // #endif
   },
   
   // 当时间时间段变化时，重新加载动画
   watch: {
     currentTimePeriod(newVal) {
+      // #ifdef H5
       this.loadLottieAnimation(newVal)
+      // #endif
     }
   },
   
@@ -139,16 +177,19 @@ export default {
       // 更新提示文字
       this.currentHint = this.hintMap[this.currentTimePeriod]
       
-      // 加载对应的Lottie动画
+      // #ifdef H5
+      // 加载对应的Lottie动画（仅H5环境）
       this.$nextTick(() => {
         this.loadLottieAnimation(this.currentTimePeriod)
       })
+      // #endif
     },
     
     /**
-     * 加载Lottie动画
+     * 加载Lottie动画（仅H5环境）
      * @param {string} period - 时间段标识
      */
+    // #ifdef H5
     async loadLottieAnimation(period) {
       // 尝试加载Lottie动画，失败则显示占位图
       try {
@@ -283,6 +324,7 @@ export default {
         this.lottieInstance = null
       }
     },
+    // #endif
     
     /**
      * 启动定时器，每分钟刷新一次时间
@@ -502,6 +544,27 @@ export default {
   margin-top: 20rpx;
   font-size: 28rpx;
   color: #ff4d88;
+  font-weight: 500;
+}
+
+/* 小程序环境熊猫占位 */
+.panda-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.panda-emoji {
+  font-size: 80rpx;
+}
+
+.panda-label {
+  font-size: 20rpx;
+  color: #ff80aa;
+  margin-top: 10rpx;
   font-weight: 500;
 }
 </style>

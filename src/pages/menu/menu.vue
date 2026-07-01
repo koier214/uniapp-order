@@ -21,7 +21,7 @@
     <!-- 个人信息栏 -->
     <view class="info-bar">
       <view class="avatar-box" @click="goToEdit">
-        <image v-if="avatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+        <image v-if="showAvatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" @error="onAvatarError" />
         <text v-else class="avatar-text">{{ avatarText }}</text>
       </view>
       <view class="user-info">
@@ -160,6 +160,7 @@
 
 <script>
 import cartStore from '../../store/cart.js'
+import { getStaticUrl } from '../../utils/config.js'
 import { getHotFoods } from '../../api/food.js'
 import { submitReview } from '../../api/review.js'
 import { getUserInfo } from '../../api/user.js'
@@ -179,7 +180,8 @@ export default {
       signature: '今天也要好好吃饭~',
       points: 0,
       foodData: [],
-      hasHotFoods: true
+      hasHotFoods: true,
+      avatarLoadError: false
     }
   },
   computed: {
@@ -187,14 +189,11 @@ export default {
       return this.nickname.charAt(0) || '萌'
     },
     avatarUrl() {
-      // 如果avatar是完整URL，直接返回；如果是相对路径，拼接BASE_URL
-      if (!this.avatar) return ''
-      if (this.avatar.startsWith('http://') || this.avatar.startsWith('https://')) {
-        return this.avatar
-      }
-      // 拼接后端地址
-      const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site'
-      return BASE_URL + this.avatar
+      return getStaticUrl(this.avatar)
+    },
+    // 当图片加载失败时回退到文字头像
+    showAvatar() {
+      return this.avatar && !this.avatarLoadError
     },
     ratingText() {
       const texts = ['', '非常不满意', '不满意', '一般', '满意', '非常满意']
@@ -224,6 +223,11 @@ export default {
       uni.navigateTo({
         url: '/pages/profileEdit/profileEdit'
       })
+    },
+    onAvatarError() {
+      // 图片加载失败时回退到文字头像显示
+      console.log('[DEBUG] 头像图片加载失败，切换到文字头像')
+      this.avatarLoadError = true
     },
     loadUserInfo() {
       try {

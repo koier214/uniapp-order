@@ -12,7 +12,7 @@
     <!-- 头像区域 -->
     <view class="avatar-section">
       <view class="avatar-box">
-        <image v-if="avatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+        <image v-if="showAvatar" class="avatar-img" :src="avatarUrl" mode="aspectFill" @error="onAvatarError" />
         <text v-else class="avatar-text">{{ avatarText }}</text>
       </view>
       <view class="change-avatar-btn" @click="changeAvatar">
@@ -82,6 +82,7 @@
 
 <script>
 import { updateUserInfo, uploadAvatar } from '../../api/user.js'
+import { getStaticUrl } from '../../utils/config.js'
 
 export default {
   data() {
@@ -90,7 +91,8 @@ export default {
       nickname: '美食达人',
       phone: '',
       email: '',
-      signature: '今天也要好好吃饭~'
+      signature: '今天也要好好吃饭~',
+      avatarLoadError: false
     }
   },
   computed: {
@@ -98,14 +100,11 @@ export default {
       return this.nickname.charAt(0) || '萌'
     },
     avatarUrl() {
-      // 如果avatar是完整URL，直接返回；如果是相对路径，拼接BASE_URL
-      if (!this.avatar) return ''
-      if (this.avatar.startsWith('http://') || this.avatar.startsWith('https://')) {
-        return this.avatar
-      }
-      // 拼接后端地址
-      const BASE_URL = 'https://qhhxncfdtcyd.sealoshzh.site'
-      return BASE_URL + this.avatar
+      return getStaticUrl(this.avatar)
+    },
+    // 当图片加载失败时回退到文字头像
+    showAvatar() {
+      return this.avatar && !this.avatarLoadError
     }
   },
   onLoad() {
@@ -127,6 +126,11 @@ export default {
         console.error('加载用户信息失败', e)
       }
     },
+    onAvatarError() {
+      // 图片加载失败时回退到文字头像显示
+      console.log('[DEBUG] 头像图片加载失败，切换到文字头像')
+      this.avatarLoadError = true
+    },
     goBack() {
       // 判断页面栈中是否有上一页
       const pages = getCurrentPages()
@@ -141,6 +145,49 @@ export default {
       }
     },
     changeAvatar() {
+      // #ifdef H5
+      // H5环境直接调用chooseImage
+      this.doChooseImage()
+      // #endif
+      
+      // #ifdef MP-WEIXIN
+      // 小程序环境：先检查相册授权状态
+      uni.getSetting({
+        success: (res) => {
+          if (!res.authSetting['scope.writePhotosAlbum']) {
+            // 未授权，先请求授权
+            uni.authorize({
+              scope: 'scope.writePhotosAlbum',
+              success: () => {
+                this.doChooseImage()
+              },
+              fail: () => {
+                // 用户拒绝授权，引导去设置页
+                uni.showModal({
+                  title: '提示',
+                  content: '需要访问您的相册来更换头像，请前往设置页面开启相册权限',
+                  confirmText: '去设置',
+                  success: (modalRes) => {
+                    if (modalRes.confirm) {
+                      uni.openSetting()
+                    }
+                  }
+                })
+              }
+            })
+          } else {
+            // 已授权，直接选择图片
+            this.doChooseImage()
+          }
+        },
+        fail: () => {
+          // getSetting失败，直接尝试选择图片
+          this.doChooseImage()
+        }
+      })
+      // #endif
+    },
+    doChooseImage() {
       uni.chooseImage({
         count: 1,
         sizeType: ['compressed'],
